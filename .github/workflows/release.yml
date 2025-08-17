@@ -1,0 +1,93 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24'
+
+      - name: Build
+        run: go build -ldflags "-s -w -extldflags '-static'" -o llmapibenchmark_linux_amd64 ./cmd/
+
+      - name: Archive
+        run: tar -czvf llmapibenchmark_linux_amd64.tar.gz llmapibenchmark_linux_amd64
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: llmapibenchmark_linux_amd64
+          path: llmapibenchmark_linux_amd64.tar.gz
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24'
+
+      - name: Build
+        run: go build -ldflags "-s -w" -o llmapibenchmark_windows_amd64.exe .\cmd\
+
+      - name: Archive
+        run: Compress-Archive -Path llmapibenchmark_windows_amd64.exe -DestinationPath llmapibenchmark_windows_amd64.zip
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: llmapibenchmark_windows_amd64
+          path: llmapibenchmark_windows_amd64.zip
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [build-linux, build-windows]
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Linux Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: artifacts/llmapibenchmark_linux_amd64/llmapibenchmark_linux_amd64.tar.gz
+          asset_name: llmapibenchmark_linux_amd64.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Upload Windows Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: artifacts/llmapibenchmark_windows_amd64/llmapibenchmark_windows_amd64.zip
+          asset_name: llmapibenchmark_windows_amd64.zip
+          asset_content_type: application/zip
