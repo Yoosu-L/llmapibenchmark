@@ -68,7 +68,7 @@ func main() {
 	}
 
 	// Determine input parameters and call benchmark function
-	if *prompt != "Write a long story, no less than 10,000 words, starting from a long, long time ago." {
+	if *prompt != defaultPrompt {
 		benchmark.UseRandomInput = false
 	} else if *numWords != 0 {
 		benchmark.UseRandomInput = true
