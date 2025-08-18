@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"time"
 
@@ -46,6 +47,7 @@ func AskOpenAiStream(client *openai.Client, model string, prompt string, maxToke
 	}
 	defer stream.Close()
 
+	chunksReceived := 0
 	for {
 		resp, err := stream.Recv()
 		if errors.Is(err, io.EOF) {
@@ -66,6 +68,14 @@ func AskOpenAiStream(client *openai.Client, model string, prompt string, maxToke
 		if resp.Usage != nil {
 			lastUsage = resp.Usage
 		}
+
+		chunksReceived++
+		if os.Getenv("DEBUG") == "true" {
+			fmt.Fprintf(os.Stderr, "Chunks received: %d       \r", chunksReceived)
+		}
+	}
+	if os.Getenv("DEBUG") == "true" {
+		fmt.Fprintf(os.Stderr, "\n")
 	}
 
 	var promptTokens, completionTokens int
