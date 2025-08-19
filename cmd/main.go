@@ -77,19 +77,16 @@ func main() {
 	}
 
 	// Get input tokens
+	var inputTokens int
 	if benchmark.UseRandomInput {
-		resp, err := api.AskOpenAiWithRandomInput(client, benchmark.ModelName, *numWords/4, 4)
-		if err != nil {
-			log.Fatalf("Error getting prompt tokens: %v", err)
-		}
-		benchmark.InputTokens = resp.Usage.PromptTokens
+		_, _, inputTokens, err = api.AskOpenAiStreamWithRandomInput(client, benchmark.ModelName, *numWords/4, 4)
 	} else {
-		resp, err := api.AskOpenAi(client, benchmark.ModelName, *prompt, 4)
-		if err != nil {
-			log.Fatalf("Error getting prompt tokens: %v", err)
-		}
-		benchmark.InputTokens = resp.Usage.PromptTokens
+		_, _, inputTokens, err = api.AskOpenAiStream(client, benchmark.ModelName, *prompt, 4)
 	}
+	if err != nil {
+		log.Fatalf("Error getting input token count: %v", err)
+	}
+	benchmark.InputTokens = inputTokens
 
 	if *format == "" {
 		err := benchmark.runCli()
