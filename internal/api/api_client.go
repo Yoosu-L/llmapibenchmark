@@ -12,8 +12,8 @@ import (
 	"github.com/sashabaranov/go-openai"
 )
 
-// AskOpenAiStream sends a prompt to the OpenAI API, processes the response stream and returns stats on it.
-func AskOpenAiStream(client *openai.Client, model string, prompt string, maxTokens int) (float64, int, int, error) {
+// AskOpenAi sends a prompt to the OpenAI API, processes the response stream and returns stats on it.
+func AskOpenAi(client *openai.Client, model string, prompt string, maxTokens int) (float64, int, int, error) {
 	start := time.Now()
 
 	var (
@@ -87,9 +87,9 @@ func AskOpenAiStream(client *openai.Client, model string, prompt string, maxToke
 	return timeToFirstToken, completionTokens, promptTokens, nil
 }
 
-func AskOpenAiStreamWithRandomInput(client *openai.Client, model string, numWords int, maxTokens int) (float64, int, int, error) {
+func AskOpenAiWithRandomInput(client *openai.Client, model string, numWords int, maxTokens int) (float64, int, int, error) {
 	prompt := generateRandomPhrase(numWords)
-	return AskOpenAiStream(client, model, prompt, maxTokens)
+	return AskOpenAi(client, model, prompt, maxTokens)
 }
 
 // GetFirstAvailableModel retrieves the first available model from the OpenAI API.

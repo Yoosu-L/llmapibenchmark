@@ -79,9 +79,9 @@ func main() {
 	// Get input tokens
 	var inputTokens int
 	if benchmark.UseRandomInput {
-		_, _, inputTokens, err = api.AskOpenAiStreamWithRandomInput(client, benchmark.ModelName, *numWords/4, 4)
+		_, _, inputTokens, err = api.AskOpenAiWithRandomInput(client, benchmark.ModelName, *numWords/4, 4)
 	} else {
-		_, _, inputTokens, err = api.AskOpenAiStream(client, benchmark.ModelName, *prompt, 4)
+		_, _, inputTokens, err = api.AskOpenAi(client, benchmark.ModelName, *prompt, 4)
 	}
 	if err != nil {
 		log.Fatalf("Error getting input token count: %v", err)
