@@ -58,9 +58,9 @@ func (setup *SpeedMeasurement) Run() (SpeedResult, error) {
 			var completionTokens, inputTokens int
 			var err error
 			if setup.UseRandomInput {
-				ttft, completionTokens, inputTokens, err = api.AskOpenAiStreamWithRandomInput(client, setup.ModelName, setup.NumWords, setup.MaxTokens)
+				ttft, completionTokens, inputTokens, err = api.AskOpenAiWithRandomInput(client, setup.ModelName, setup.NumWords, setup.MaxTokens)
 			} else {
-				ttft, completionTokens, inputTokens, err = api.AskOpenAiStream(client, setup.ModelName, setup.Prompt, setup.MaxTokens)
+				ttft, completionTokens, inputTokens, err = api.AskOpenAi(client, setup.ModelName, setup.Prompt, setup.MaxTokens)
 			}
 			if err != nil {
 				threadErrors.Store(index, err)

@@ -5,14 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/sashabaranov/go-openai"
 )
 
-// AskOpenAiStream sends a prompt to the OpenAI API, processes the response stream and returns stats on it.
-func AskOpenAiStream(client *openai.Client, model string, prompt string, maxTokens int) (float64, int, int, error) {
+// AskOpenAi sends a prompt to the OpenAI API, processes the response stream and returns stats on it.
+func AskOpenAi(client *openai.Client, model string, prompt string, maxTokens int) (float64, int, int, error) {
 	start := time.Now()
 
 	var (
@@ -46,6 +47,7 @@ func AskOpenAiStream(client *openai.Client, model string, prompt string, maxToke
 	}
 	defer stream.Close()
 
+	chunksReceived := 0
 	for {
 		resp, err := stream.Recv()
 		if errors.Is(err, io.EOF) {
@@ -66,6 +68,14 @@ func AskOpenAiStream(client *openai.Client, model string, prompt string, maxToke
 		if resp.Usage != nil {
 			lastUsage = resp.Usage
 		}
+
+		chunksReceived++
+		if os.Getenv("DEBUG") == "true" {
+			fmt.Fprintf(os.Stderr, "Chunks received: %d/%d       \r", chunksReceived, maxTokens)
+		}
+	}
+	if os.Getenv("DEBUG") == "true" {
+		fmt.Fprintf(os.Stderr, "\n")
 	}
 
 	var promptTokens, completionTokens int
@@ -77,40 +87,7 @@ func AskOpenAiStream(client *openai.Client, model string, prompt string, maxToke
 	return timeToFirstToken, completionTokens, promptTokens, nil
 }
 
-func AskOpenAiStreamWithRandomInput(client *openai.Client, model string, numWords int, maxTokens int) (float64, int, int, error) {
-	prompt := generateRandomPhrase(numWords)
-	return AskOpenAiStream(client, model, prompt, maxTokens)
-}
-
-// AskOpenAi sends a prompt to the OpenAI API and returns the response, not using streaming.
-func AskOpenAi(client *openai.Client, model, prompt string, maxTokens int) (*openai.ChatCompletionResponse, error) {
-	resp, err := client.CreateChatCompletion(
-		context.Background(),
-		openai.ChatCompletionRequest{
-			Model: model,
-			Messages: []openai.ChatCompletionMessage{
-				{
-					Role:    openai.ChatMessageRoleSystem,
-					Content: "You are a helpful assistant.",
-				},
-				{
-					Role:    openai.ChatMessageRoleUser,
-					Content: prompt,
-				},
-			},
-			// Add the deprecated `MaxTokens` for backward compatibility with some older API servers.
-			MaxTokens:           maxTokens,
-			MaxCompletionTokens: maxTokens,
-			Temperature:         1,
-		},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("OpenAI API request failed: %w", err)
-	}
-	return &resp, nil
-}
-
-func AskOpenAiWithRandomInput(client *openai.Client, model string, numWords int, maxTokens int) (*openai.ChatCompletionResponse, error) {
+func AskOpenAiWithRandomInput(client *openai.Client, model string, numWords int, maxTokens int) (float64, int, int, error) {
 	prompt := generateRandomPhrase(numWords)
 	return AskOpenAi(client, model, prompt, maxTokens)
 }
