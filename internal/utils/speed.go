@@ -14,6 +14,7 @@ import (
 
 type SpeedMeasurement struct {
 	BaseUrl        string
+	ApiVersion     string
 	ApiKey         string
 	ModelName      string
 	Prompt         string
@@ -41,6 +42,7 @@ func roundToTwoDecimals(f float64) float64 {
 func (setup *SpeedMeasurement) Run(bar *progressbar.ProgressBar) (SpeedResult, error) {
 	config := openai.DefaultConfig(setup.ApiKey)
 	config.BaseURL = setup.BaseUrl
+	config.APIVersion = setup.ApiVersion
 	client := openai.NewClientWithConfig(config)
 
 	var wg sync.WaitGroup

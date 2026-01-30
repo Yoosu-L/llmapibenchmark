@@ -101,6 +101,7 @@ func (benchmark *Benchmark) measureSpeed(latency float64, concurrency int, clear
 
 	speedMeasurement := utils.SpeedMeasurement{
 		BaseUrl:     benchmark.BaseURL,
+		ApiVersion:  benchmark.ApiVersion,
 		ApiKey:      benchmark.ApiKey,
 		ModelName:   benchmark.ModelName,
 		Prompt:      benchmark.Prompt,

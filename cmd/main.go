@@ -19,6 +19,7 @@ const (
 
 func main() {
 	baseURL := pflag.StringP("base-url", "u", "", "Base URL of the OpenAI API")
+	apiVersion := pflag.StringP("api-version", "v", "", "API version (api-version) query parameter value")
 	apiKey := pflag.StringP("api-key", "k", "", "API key for authentication")
 	model := pflag.StringP("model", "m", "", "Model to be used for the requests (optional)")
 	prompt := pflag.StringP("prompt", "p", defaultPrompt, "Prompt to be used for generating responses")
@@ -39,6 +40,7 @@ func main() {
 	// Create benchmark
 	benchmark := Benchmark{}
 	benchmark.BaseURL = *baseURL
+	benchmark.ApiVersion = *apiVersion
 	benchmark.ApiKey = *apiKey
 	benchmark.ModelName = *model
 	benchmark.Prompt = *prompt
@@ -58,6 +60,7 @@ func main() {
 	}
 	config := openai.DefaultConfig(*apiKey)
 	config.BaseURL = *baseURL
+	config.APIVersion = *apiVersion
 
 	if *insecureSkipTLSVerify {
 		fmt.Fprintln(os.Stderr, "\n/!\\ WARNING: Skipping TLS certificate verification. This is insecure and should not be used in production. /!\\")
