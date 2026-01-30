@@ -12,11 +12,11 @@ import (
 func PrintBenchmarkHeader(modelName string, inputTokens int, maxTokens int, latency float64) {
 	banner :=
 		`
-################################################################################################################
-				          LLM API Throughput Benchmark
-				    https://github.com/Yoosu-L/llmapibenchmark
-					 Time：%s
-################################################################################################################`
+##############################################################################################################################################
+                                                          LLM API Throughput Benchmark
+                                                    https://github.com/Yoosu-L/llmapibenchmark
+                                                          Time：%s
+##############################################################################################################################################`
 
 	fmt.Printf(banner+"\n", time.Now().UTC().Format("2006-01-02 15:04:05 UTC+0"))
 	fmt.Printf("Input Tokens: %d\n", inputTokens)
@@ -46,8 +46,8 @@ func SaveResultsToMD(results [][]interface{}, modelName string, inputTokens int,
 	file.WriteString(fmt.Sprintf("Output Tokens: %d\n", maxTokens))
 	file.WriteString(fmt.Sprintf("Test Model: %s\n", modelName))
 	file.WriteString(fmt.Sprintf("Latency: %.2f ms\n```\n\n", latency))
-	file.WriteString("| Concurrency | Generation Throughput (tokens/s) |  Prompt Throughput (tokens/s) | Min TTFT (s) | Max TTFT (s) | Success Rate |\n")
-	file.WriteString("|-------------|----------------------------------|-------------------------------|--------------|--------------|--------------|\n")
+	file.WriteString("| Concurrency | Generation Throughput (tokens/s) |  Prompt Throughput (tokens/s) | Min TTFT (s) | Max TTFT (s) | Success Rate | Duration (s) |\n")
+	file.WriteString("|-------------|----------------------------------|-------------------------------|--------------|--------------|--------------|--------------|\n")
 
 	for _, result := range results {
 		concurrency := result[0].(int)
@@ -56,13 +56,16 @@ func SaveResultsToMD(results [][]interface{}, modelName string, inputTokens int,
 		minTTFT := result[3].(float64)
 		maxTTFT := result[4].(float64)
 		successRate := result[5].(float64)
-		file.WriteString(fmt.Sprintf("| %11d | %32.2f | %29.2f | %12.2f | %12.2f | %11.2f%% |\n",
+		duration := result[6].(float64)
+		file.WriteString(fmt.Sprintf("| %11d | %32.2f | %29.2f | %12.2f | %12.2f | %11.2f%% | %12.2f |\n",
 			concurrency,
 			generationSpeed,
 			promptThroughput,
 			minTTFT,
 			maxTTFT,
-			successRate*100))
+			successRate*100,
+			duration,
+		))
 	}
 
 	fmt.Printf("Results saved to: %s\n\n", filename)

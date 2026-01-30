@@ -19,8 +19,8 @@ func (benchmark *Benchmark) runCli() error {
 	utils.PrintBenchmarkHeader(benchmark.ModelName, benchmark.InputTokens, benchmark.MaxTokens, latency)
 
 	// Print table header
-	fmt.Println("| Concurrency | Generation Throughput (tokens/s) |  Prompt Throughput (tokens/s) | Min TTFT (s) | Max TTFT (s) | Success Rate |")
-	fmt.Println("|-------------|----------------------------------|-------------------------------|--------------|--------------|--------------|")
+	fmt.Println("| Concurrency | Generation Throughput (tokens/s) |  Prompt Throughput (tokens/s) | Min TTFT (s) | Max TTFT (s) | Success Rate | Duration (s) |")
+	fmt.Println("|-------------|----------------------------------|-------------------------------|--------------|--------------|--------------|--------------|")
 
 	// Test each concurrency level and print results
 	var results [][]interface{}
@@ -31,13 +31,14 @@ func (benchmark *Benchmark) runCli() error {
 		}
 
 		// Print current results
-		fmt.Printf("| %11d | %32.2f | %29.2f | %12.2f | %12.2f | %11.2f%% |\n",
+		fmt.Printf("| %11d | %32.2f | %29.2f | %12.2f | %12.2f | %11.2f%% | %12.2f |\n",
 			concurrency,
 			result.GenerationSpeed,
 			result.PromptThroughput,
 			result.MinTtft,
 			result.MaxTtft,
 			result.SuccessRate*100,
+			result.Duration,
 		)
 
 		// Save results for later
@@ -48,10 +49,12 @@ func (benchmark *Benchmark) runCli() error {
 			result.MinTtft,
 			result.MaxTtft,
 			result.SuccessRate,
+			result.Duration,
 		})
 	}
 
-	fmt.Println("\n================================================================================================================")
+	fmt.Println("|-------------|----------------------------------|-------------------------------|--------------|--------------|--------------|--------------|")
+	fmt.Println("\n==============================================================================================================================================")
 
 	// Save results to Markdown
 	utils.SaveResultsToMD(results, benchmark.ModelName, benchmark.InputTokens, benchmark.MaxTokens, latency)

@@ -31,6 +31,7 @@ type SpeedResult struct {
 	MaxTtft          float64 `json:"max_ttft" yaml:"max-ttft"`
 	MinTtft          float64 `json:"min_ttft" yaml:"min-ttft"`
 	SuccessRate      float64 `json:"success_rate" yaml:"success-rate"`
+	Duration         float64 `json:"duration" yaml:"duration"`
 }
 
 func roundToTwoDecimals(f float64) float64 {
@@ -116,6 +117,7 @@ func (setup *SpeedMeasurement) Run(bar *progressbar.ProgressBar) (SpeedResult, e
 	})
 	measurement.MaxTtft = roundToTwoDecimals(measurement.MaxTtft)
 	measurement.MinTtft = roundToTwoDecimals(measurement.MinTtft)
+	measurement.Duration = roundToTwoDecimals(float64(duration.Seconds()))
 
 	// Calculate speed (tokens/second)
 	measurement.GenerationSpeed = roundToTwoDecimals(float64(totalResponseTokens) / (duration.Seconds() - setup.Latency/1000))
