@@ -4,6 +4,7 @@ import "github.com/Yoosu-L/llmapibenchmark/internal/utils"
 
 type Benchmark struct {
 	BaseURL           string
+	ApiVersion        string
 	ApiKey            string
 	ModelName         string
 	Prompt            string
