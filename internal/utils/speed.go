@@ -21,8 +21,16 @@ type SpeedMeasurement struct {
 	UseRandomInput bool
 	NumWords       int
 	MaxTokens      int
+	// Latency is the measured network round-trip in milliseconds, used to
+	// refine TTFT-based estimates.
 	Latency        float64
 	Concurrency    int
+
+	// PromptTokensSink, when set, receives the prompt token count of the first
+	// successful request. The count only arrives in the final usage chunk of
+	// a stream, so this lets the caller display Input without paying for a
+	// separate probe request before the benchmark.
+	PromptTokensSink *atomic.Int64
 
 	// Client is shared with the rest of the benchmark so transport settings
 	// (retries, TLS) apply consistently.
@@ -93,6 +101,10 @@ func (setup *SpeedMeasurement) Run(bar *progressbar.ProgressBar) (SpeedResult, e
 				return
 			}
 			successfulRequests.Add(1)
+			if setup.PromptTokensSink != nil && chat.PromptTokens > 0 {
+				// First successful request wins; later ones are the same length.
+				setup.PromptTokensSink.CompareAndSwap(0, int64(chat.PromptTokens))
+			}
 			ttfts.Store(index, chat.TTFT)
 			ttftSources.Store(index, chat.TTFTSource)
 			ttftFields.Store(index, chat.TTFTField)

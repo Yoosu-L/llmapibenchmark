@@ -102,21 +102,8 @@ func main() {
 		benchmark.UseRandomInput = false
 	}
 
-	// Get input tokens
-	if benchmark.UseRandomInput {
-		chat, err := api.AskOpenAiRandomInput(client, benchmark.ModelName, benchmark.NumWords, 4, nil)
-		if err != nil {
-			log.Fatalf("Error getting prompt tokens: %v", err)
-		}
-		benchmark.InputTokens = chat.PromptTokens
-	} else {
-		chat, err := api.AskOpenAi(client, benchmark.ModelName, *prompt, 4, nil)
-		if err != nil {
-			log.Fatalf("Error getting prompt tokens: %v", err)
-		}
-		benchmark.InputTokens = chat.PromptTokens
-	}
-
+	// InputTokens is no longer probed up front: it is backfilled from the
+	// first benchmark request's usage chunk (see runCli/run in benchmark.go).
 	if *format == "" {
 		err := benchmark.runCli()
 		if err != nil {

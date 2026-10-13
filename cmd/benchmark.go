@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync/atomic"
 
 	"github.com/Yoosu-L/llmapibenchmark/internal/utils"
 	"github.com/schollz/progressbar/v3"
@@ -16,24 +17,35 @@ func (benchmark *Benchmark) runCli() error {
 		return fmt.Errorf("latency test error: %v", err)
 	}
 
-	// Print benchmark header
-	utils.PrintBenchmarkHeader(benchmark.ModelName, benchmark.InputTokens, benchmark.MaxTokens, latency)
-
-	// Print table header
 	bold := "\033[1m"
 	green := "\033[32m"
 	dim := "\033[2m"
 	reset := "\033[0m"
-	fmt.Printf("%s%s| Conc | Decode TPS | Prompt TPS | Min TTFT(s) | Max TTFT(s) | Success | Total(s) |%s\n", green, bold, reset)
-	fmt.Printf("%s|:----:|:----------:|:----------:|:-----------:|:-----------:|:-------:|:--------:|%s\n", green, reset)
+	printTableHeader := func() {
+		fmt.Printf("%s%s| Conc | Decode TPS | Prompt TPS | Min TTFT(s) | Max TTFT(s) | Success | Total(s) |%s\n", green, bold, reset)
+		fmt.Printf("%s|:----:|:----------:|:----------:|:-----------:|:-----------:|:-------:|:--------:|%s\n", green, reset)
+	}
+
+	// The real input token count only arrives in the final usage chunk of the
+	// first benchmark request, so the header is printed after the first round
+	// instead of paying for a separate probe request up front.
+	var inputTokens atomic.Int64
 
 	// Test each concurrency level and print results
 	var results []utils.SpeedResult
 	var notices []string
+	headerPrinted := false
 	for _, concurrency := range benchmark.ConcurrencyLevels {
-		result, err := benchmark.measureSpeed(latency, concurrency, true)
+		result, err := benchmark.measureSpeed(latency, concurrency, true, &inputTokens)
 		if err != nil {
 			return fmt.Errorf("concurrency %d: %v", concurrency, err)
+		}
+
+		if !headerPrinted {
+			benchmark.InputTokens = int(inputTokens.Load())
+			utils.PrintBenchmarkHeader(benchmark.ModelName, benchmark.InputTokens, benchmark.MaxTokens, latency)
+			printTableHeader()
+			headerPrinted = true
 		}
 
 		// Print current results
@@ -44,6 +56,13 @@ func (benchmark *Benchmark) runCli() error {
 		if notice := utils.TtftNotice(result); notice != "" {
 			notices = append(notices, notice)
 		}
+	}
+
+	if !headerPrinted {
+		// Nothing was measured (e.g. empty concurrency list); still print the
+		// header so the closing separator is not orphaned.
+		utils.PrintBenchmarkHeader(benchmark.ModelName, benchmark.InputTokens, benchmark.MaxTokens, latency)
+		printTableHeader()
 	}
 
 	fmt.Printf("%s|:----:|:----------:|:----------:|:-----------:|:-----------:|:-------:|:--------:|%s\n", green, reset)
@@ -71,10 +90,16 @@ func (benchmark *Benchmark) run() (BenchmarkResult, error) {
 	}
 	result.Latency = latency
 
+	var inputTokens atomic.Int64
 	for _, concurrency := range benchmark.ConcurrencyLevels {
-		measurement, err := benchmark.measureSpeed(latency, concurrency, false)
+		measurement, err := benchmark.measureSpeed(latency, concurrency, false, &inputTokens)
 		if err != nil {
 			return result, fmt.Errorf("concurrency %d: %v", concurrency, err)
+		}
+
+		// Backfill from the first successful request's usage chunk.
+		if result.InputTokens == 0 {
+			result.InputTokens = int(inputTokens.Load())
 		}
 
 		result.Results = append(result.Results, measurement)
@@ -83,7 +108,7 @@ func (benchmark *Benchmark) run() (BenchmarkResult, error) {
 	return result, nil
 }
 
-func (benchmark *Benchmark) measureSpeed(latency float64, concurrency int, clearProgress bool) (utils.SpeedResult, error) {
+func (benchmark *Benchmark) measureSpeed(latency float64, concurrency int, clearProgress bool, inputTokens *atomic.Int64) (utils.SpeedResult, error) {
 
 	// Disable terminal auto-wrap (DECAWM) to prevent the progress bar from breaking into multiple new lines
 	fmt.Fprint(os.Stderr, "\x1b[?7l")
@@ -123,6 +148,7 @@ func (benchmark *Benchmark) measureSpeed(latency float64, concurrency int, clear
 	if benchmark.UseRandomInput {
 		speedMeasurement.UseRandomInput = true
 	}
+	speedMeasurement.PromptTokensSink = inputTokens
 
 	result, err := speedMeasurement.Run(bar)
 	if err != nil {
