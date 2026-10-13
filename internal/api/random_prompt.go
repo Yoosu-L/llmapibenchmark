@@ -3,7 +3,6 @@ package api
 import (
 	"math/rand"
 	"strings"
-	"time"
 )
 
 const (
@@ -13,9 +12,11 @@ const (
 
 var letters = []rune("abcdefghijklmnopqrstuvwxyz")
 
-// generateRandomWord
+// generateRandomWord returns a random lowercase letter string. Deliberately
+// not natural words: all tokenizers fall back to the same byte-level
+// fragments, so the tokens-per-word ratio stays roughly stable across models.
 func generateRandomWord() string {
-	// length（3-10）
+	// Word length ranges from 3 to 10 characters.
 	wordLength := minWordLength + rand.Intn(maxWordLength-minWordLength+1)
 
 	word := make([]rune, wordLength)
@@ -27,10 +28,8 @@ func generateRandomWord() string {
 	return string(word)
 }
 
-// generateRandomPhrase
+// generateRandomPhrase builds a cache-busting prompt of numWords random words.
 func generateRandomPhrase(numWords int) string {
-	rand.Seed(time.Now().UnixNano())
-
 	randomWords := make([]string, numWords)
 	for i := 0; i < numWords; i++ {
 		randomWords[i] = generateRandomWord()
