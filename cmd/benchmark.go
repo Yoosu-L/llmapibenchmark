@@ -21,6 +21,11 @@ func (benchmark *Benchmark) runCli() error {
 	green := "\033[32m"
 	dim := "\033[2m"
 	reset := "\033[0m"
+	// Drop ANSI colors on redirect too; agents parsing stdout only want text.
+	stdoutIsTTY := utils.IsTerminal(os.Stdout)
+	if !stdoutIsTTY {
+		bold, green, dim, reset = "", "", "", ""
+	}
 	printTableHeader := func() {
 		fmt.Printf("%s%s| Conc | Decode TPS | Prompt TPS | Min TTFT(s) | Max TTFT(s) | Success | Total(s) |%s\n", green, bold, reset)
 		fmt.Printf("%s|:----:|:----------:|:----------:|:-----------:|:-----------:|:-------:|:--------:|%s\n", green, reset)
@@ -69,7 +74,7 @@ func (benchmark *Benchmark) runCli() error {
 	for _, notice := range notices {
 		fmt.Printf("%s→ %s%s\n", dim, notice, reset)
 	}
-	fmt.Println("\n" + "\033[36m" + strings.Repeat("=", 80) + "\033[0m")
+	fmt.Println("\n" + green + strings.Repeat("=", 80) + reset)
 
 	// Save results to Markdown
 	utils.SaveResultsToMD(results, benchmark.ModelName, benchmark.InputTokens, benchmark.MaxTokens, latency)
@@ -110,28 +115,35 @@ func (benchmark *Benchmark) run() (BenchmarkResult, error) {
 
 func (benchmark *Benchmark) measureSpeed(latency float64, concurrency int, clearProgress bool, inputTokens *atomic.Int64) (utils.SpeedResult, error) {
 
-	// Disable terminal auto-wrap (DECAWM) to prevent the progress bar from breaking into multiple new lines
-	fmt.Fprint(os.Stderr, "\x1b[?7l")
-	// Re-enable terminal auto-wrap when the function returns
-	defer fmt.Fprint(os.Stderr, "\x1b[?7h")
+	// Progress bar and terminal escapes only make sense on an interactive
+	// stderr; with a pipe/redirect they would flood the captured output.
+	interactive := utils.IsTerminal(os.Stderr)
 
-	// Create a progress bar for this specific concurrency level
-	expectedTokens := concurrency * benchmark.MaxTokens
-	// Pad description to a fixed length for consistent alignment
-	description := fmt.Sprintf("Conc %-2d", concurrency)
-	barWidth := 20
+	var bar *progressbar.ProgressBar
+	if interactive {
+		// Disable terminal auto-wrap (DECAWM) to prevent the progress bar from breaking into multiple new lines
+		fmt.Fprint(os.Stderr, "\x1b[?7l")
+		// Re-enable terminal auto-wrap when the function returns
+		defer fmt.Fprint(os.Stderr, "\x1b[?7h")
 
-	bar := progressbar.NewOptions(expectedTokens,
-		progressbar.OptionSetWriter(os.Stderr),
-		progressbar.OptionSetDescription(description),
-		progressbar.OptionSetWidth(barWidth),
-		progressbar.OptionUseANSICodes(true),
-		progressbar.OptionShowCount(),
-		progressbar.OptionShowIts(),
-		progressbar.OptionSetItsString("tokens"),
-		progressbar.OptionSpinnerType(14),
-		progressbar.OptionSetRenderBlankState(true),
-	)
+		// Create a progress bar for this specific concurrency level
+		expectedTokens := concurrency * benchmark.MaxTokens
+		// Pad description to a fixed length for consistent alignment
+		description := fmt.Sprintf("Conc %-2d", concurrency)
+		barWidth := 20
+
+		bar = progressbar.NewOptions(expectedTokens,
+			progressbar.OptionSetWriter(os.Stderr),
+			progressbar.OptionSetDescription(description),
+			progressbar.OptionSetWidth(barWidth),
+			progressbar.OptionUseANSICodes(true),
+			progressbar.OptionShowCount(),
+			progressbar.OptionShowIts(),
+			progressbar.OptionSetItsString("tokens"),
+			progressbar.OptionSpinnerType(14),
+			progressbar.OptionSetRenderBlankState(true),
+		)
+	}
 
 	speedMeasurement := utils.SpeedMeasurement{
 		BaseUrl:     benchmark.BaseURL,
@@ -155,13 +167,15 @@ func (benchmark *Benchmark) measureSpeed(latency float64, concurrency int, clear
 		return result, fmt.Errorf("measurement error: %v", err)
 	}
 
-	bar.Finish()
-	if clearProgress {
-		bar.Clear()
-	} else {
-		fmt.Fprintf(os.Stderr, "\n")
+	if bar != nil {
+		bar.Finish()
+		if clearProgress {
+			bar.Clear()
+		} else {
+			fmt.Fprintf(os.Stderr, "\n")
+		}
+		bar.Close()
 	}
-	bar.Close()
 
 	return result, nil
 }

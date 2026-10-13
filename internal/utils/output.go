@@ -78,6 +78,17 @@ func TtftNotice(measurement SpeedResult) string {
 	return ""
 }
 
+// IsTerminal reports whether f is attached to an interactive terminal.
+// Pipes and redirected files are not: progress bars and per-token redraws
+// would flood agent/CI output, so callers disable them.
+func IsTerminal(f *os.File) bool {
+	info, err := f.Stat()
+	if err != nil {
+		return false
+	}
+	return info.Mode()&os.ModeCharDevice != 0
+}
+
 // PrintBenchmarkHeader prints the benchmark header with details about the test.
 func PrintBenchmarkHeader(modelName string, inputTokens int, maxTokens int, latency float64) {
 	width := 80
@@ -85,12 +96,11 @@ func PrintBenchmarkHeader(modelName string, inputTokens int, maxTokens int, late
 	url := "https://github.com/Yoosu-L/llmapibenchmark"
 	timeStr := fmt.Sprintf("Time: %s", time.Now().UTC().Format("2006-01-02 15:04:05 UTC+0"))
 
-	// ANSI Colors
-	cyan := "\033[36m"
-	green := "\033[32m"
-	dim := "\033[2m"
-	bold := "\033[1m"
-	reset := "\033[0m"
+	// ANSI Colors; plain text when stdout is redirected.
+	cyan, green, dim, bold, reset := "\033[36m", "\033[32m", "\033[2m", "\033[1m", "\033[0m"
+	if !IsTerminal(os.Stdout) {
+		cyan, green, dim, bold, reset = "", "", "", "", ""
+	}
 
 	border := strings.Repeat("#", width)
 
