@@ -15,8 +15,9 @@ The LLM API Benchmark Tool is a flexible Go-based utility designed to measure an
 
 ## Performance Metrics Measured
 
-1. **Generation Throughput**
-   - Measures tokens generated per second
+1. **Decode Throughput (Decode TPS)**
+   - Measures pure decoding speed: completion tokens divided by decode time only
+   - Decode time excludes prefill: per request it is the total time after the first token
    - Calculates across multiple concurrency levels
 
 2. **Prompt Throughput**
@@ -36,7 +37,7 @@ Test Model: Qwen2.5-7B-Instruct-AWQ
 Latency: 2.20 ms
 ```
 
-| Concurrency | Generation Throughput (tokens/s) |  Prompt Throughput (tokens/s) | Min TTFT (s) | Max TTFT (s) |
+| Concurrency | Decode Throughput (tokens/s) |  Prompt Throughput (tokens/s) | Min TTFT (s) | Max TTFT (s) |
 |-------------|----------------------------------|-------------------------------|--------------|--------------|
 |           1 |                            58.49 |                        846.81 |         0.05 |         0.05 |
 |           2 |                           114.09 |                        989.94 |         0.08 |         0.09 |
@@ -115,7 +116,7 @@ If no format is specified, the tool generates:
 
 **Markdown File Columns:**
 - **Concurrency**: Number of concurrent requests
-- **Generation Throughput**: Tokens generated per second
+- **Decode Throughput**: Tokens generated per second of pure decoding time (prefill excluded)
 - **Prompt Throughput**: Input token processing speed
 - **Min TTFT**: Minimum time to first token
 - **Max TTFT**: Maximum time to first token

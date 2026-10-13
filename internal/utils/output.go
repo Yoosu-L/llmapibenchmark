@@ -56,7 +56,7 @@ func FormatCell(value interface{}, width int, decimals int) string {
 func FormatRow(measurement SpeedResult) string {
 	return fmt.Sprintf("| %s | %s | %s | %s | %s | %s | %s |",
 		FormatCell(measurement.Concurrency, 4, 0),
-		FormatCell(measurement.GenerationSpeed, 7, 2),
+		FormatCell(measurement.DecodeTps, 10, 2),
 		FormatCell(PromptTpsCell(measurement), 10, 2),
 		FormatCell(MinTtftCell(measurement), 11, 2),
 		FormatCell(MaxTtftCell(measurement), 11, 2),
@@ -70,7 +70,7 @@ func TtftNotice(measurement SpeedResult) string {
 	switch measurement.PromptTtftSource {
 	case api.TtftSourceFallback:
 		return fmt.Sprintf(
-			"concurrency %d: TTFT never fired on a content field (%d/%d requests fell back to finish_reason); Prompt TPS and TTFT shown as n/a.",
+			"concurrency %d: TTFT never fired on a content field (%d/%d requests fell back to finish_reason); Prompt TPS and TTFT shown as n/a, Decode TPS falls back to total duration.",
 			measurement.Concurrency, measurement.TtftFallbackRequests, measurement.Concurrency)
 	case api.TtftSourceNone:
 		return fmt.Sprintf("concurrency %d: no valid TTFT.", measurement.Concurrency)
@@ -131,8 +131,8 @@ func SaveResultsToMD(results []SpeedResult, modelName string, inputTokens int, m
 	defer file.Close()
 
 	file.WriteString(fmt.Sprintf("```\nModel: %s\nLatency: %.2f ms\nInput: %d tokens / Output: %d tokens\n```\n\n", modelName, latency, inputTokens, maxTokens))
-	file.WriteString("| Conc | Gen TPS | Prompt TPS | Min TTFT(s) | Max TTFT(s) | Success | Total(s) |\n")
-	file.WriteString("|:----:|:-------:|:----------:|:-----------:|:-----------:|:-------:|:--------:|\n")
+	file.WriteString("| Conc | Decode TPS | Prompt TPS | Min TTFT(s) | Max TTFT(s) | Success | Total(s) |\n")
+	file.WriteString("|:----:|:----------:|:----------:|:-----------:|:-----------:|:-------:|:--------:|\n")
 
 	var notices []string
 	for _, measurement := range results {

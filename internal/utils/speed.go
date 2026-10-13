@@ -30,8 +30,10 @@ type SpeedMeasurement struct {
 }
 
 type SpeedResult struct {
-	Concurrency      int     `json:"concurrency" yaml:"concurrency"`
-	GenerationSpeed  float64 `json:"generation_speed" yaml:"generation-speed"`
+	Concurrency int `json:"concurrency" yaml:"concurrency"`
+	// DecodeTps is the pure decoding rate: completion tokens divided by
+	// decode time only (total request time minus TTFT), excluding prefill.
+	DecodeTps        float64 `json:"decode_tps" yaml:"decode-tps"`
 	PromptThroughput float64 `json:"prompt_throughput" yaml:"prompt-throughput"`
 	MaxTtft          float64 `json:"max_ttft" yaml:"max-ttft"`
 	MinTtft          float64 `json:"min_ttft" yaml:"min-ttft"`
@@ -68,6 +70,7 @@ func (setup *SpeedMeasurement) Run(bar *progressbar.ProgressBar) (SpeedResult, e
 	var ttfts sync.Map
 	var ttftSources sync.Map
 	var ttftFields sync.Map
+	var durations sync.Map
 	var successfulRequests atomic.Int32
 	var failedRequests atomic.Int32
 
@@ -95,6 +98,7 @@ func (setup *SpeedMeasurement) Run(bar *progressbar.ProgressBar) (SpeedResult, e
 			ttftFields.Store(index, chat.TTFTField)
 			responseTokens.Store(index, chat.CompletionTokens)
 			promptTokens.Store(index, chat.PromptTokens)
+			durations.Store(index, chat.Duration)
 		}(i)
 	}
 
@@ -181,13 +185,39 @@ func (setup *SpeedMeasurement) Run(bar *progressbar.ProgressBar) (SpeedResult, e
 	measurement.MinTtft = roundToTwoDecimals(measurement.MinTtft)
 	measurement.Duration = roundToTwoDecimals(float64(duration.Seconds()))
 
-	// Calculate speed (tokens/second)
-	// Ensure we don't divide by zero or negative values
-	genDuration := duration.Seconds() - setup.Latency/1000
-	if genDuration <= 0 {
-		genDuration = duration.Seconds() // Fallback to total duration if latency is weird
+	// Calculate decode speed (tokens/second)
+	// Decode TPS excludes prefill: per request, decode time is the request
+	// duration after the first token. Only requests whose TTFT reflects real
+	// prompt processing contribute; others would corrupt the decode window.
+	decodeTokens := 0
+	decodeSeconds := 0.0
+	durations.Range(func(key, value interface{}) bool {
+		index := key.(int)
+		if source, _ := ttftSources.Load(index); source != api.TtftSourceContent {
+			return true
+		}
+		ttft, _ := ttfts.Load(index)
+		decodeTime := value.(float64) - ttft.(float64)
+		if decodeTime <= 0 {
+			return true
+		}
+		decodeSeconds += decodeTime
+		if tokens, ok := responseTokens.Load(index); ok {
+			decodeTokens += tokens.(int)
+		}
+		return true
+	})
+	if decodeSeconds > 0 {
+		measurement.DecodeTps = roundToTwoDecimals(float64(decodeTokens) / decodeSeconds)
+	} else {
+		// No valid TTFT anywhere: fall back to the wall-clock estimate so the
+		// column still shows something comparable across concurrency levels.
+		genDuration := duration.Seconds() - setup.Latency/1000
+		if genDuration <= 0 {
+			genDuration = duration.Seconds()
+		}
+		measurement.DecodeTps = roundToTwoDecimals(float64(totalResponseTokens) / genDuration)
 	}
-	measurement.GenerationSpeed = roundToTwoDecimals(float64(totalResponseTokens) / genDuration)
 
 	// Calculate Prompt Throughput
 	// Prompt TPS = Total Prompt Tokens / Max TTFT

@@ -24,8 +24,8 @@ func (benchmark *Benchmark) runCli() error {
 	green := "\033[32m"
 	dim := "\033[2m"
 	reset := "\033[0m"
-	fmt.Printf("%s%s| Conc | Gen TPS | Prompt TPS | Min TTFT(s) | Max TTFT(s) | Success | Total(s) |%s\n", green, bold, reset)
-	fmt.Printf("%s|:----:|:-------:|:----------:|:-----------:|:-----------:|:-------:|:--------:|%s\n", green, reset)
+	fmt.Printf("%s%s| Conc | Decode TPS | Prompt TPS | Min TTFT(s) | Max TTFT(s) | Success | Total(s) |%s\n", green, bold, reset)
+	fmt.Printf("%s|:----:|:----------:|:----------:|:-----------:|:-----------:|:-------:|:--------:|%s\n", green, reset)
 
 	// Test each concurrency level and print results
 	var results []utils.SpeedResult
@@ -46,7 +46,7 @@ func (benchmark *Benchmark) runCli() error {
 		}
 	}
 
-	fmt.Printf("%s|:----:|:-------:|:----------:|:-----------:|:-----------:|:-------:|:--------:|%s\n", green, reset)
+	fmt.Printf("%s|:----:|:----------:|:----------:|:-----------:|:-----------:|:-------:|:--------:|%s\n", green, reset)
 	for _, notice := range notices {
 		fmt.Printf("%s→ %s%s\n", dim, notice, reset)
 	}

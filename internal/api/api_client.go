@@ -75,6 +75,8 @@ type ChatResult struct {
 	TTFTField        string
 	CompletionTokens int
 	PromptTokens     int
+	// Duration is the total wall time of the request, including prefill.
+	Duration float64
 }
 
 // NewClient creates a client for an OpenAI-compatible endpoint.
@@ -166,6 +168,8 @@ func AskOpenAi(client openai.Client, model string, prompt string, maxTokens int,
 	if err := stream.Err(); err != nil {
 		return ChatResult{}, fmt.Errorf("stream error: %w", err)
 	}
+
+	result.Duration = time.Since(start).Seconds()
 
 	switch {
 	case firstContentAt > 0:
