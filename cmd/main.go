@@ -9,7 +9,7 @@ import (
 
 	"github.com/Yoosu-L/llmapibenchmark/internal/api"
 	"github.com/Yoosu-L/llmapibenchmark/internal/utils"
-	"github.com/sashabaranov/go-openai"
+	"github.com/openai/openai-go/v3/option"
 	"github.com/spf13/pflag"
 )
 
@@ -63,10 +63,8 @@ func main() {
 	if *baseURL == "" {
 		log.Fatalf("--base-url is required")
 	}
-	config := openai.DefaultConfig(*apiKey)
-	config.BaseURL = *baseURL
-	config.APIVersion = *apiVersion
 
+	var clientOptions []option.RequestOption
 	if *insecureSkipTLSVerify {
 		fmt.Fprintln(os.Stderr, "\n/!\\ WARNING: Skipping TLS certificate verification. This is insecure and should not be used in production. /!\\")
 
@@ -77,10 +75,13 @@ func main() {
 		}
 		tr := defaultTransport.Clone()
 		tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-		config.HTTPClient = &http.Client{Transport: tr}
+		clientOptions = append(clientOptions, option.WithHTTPClient(&http.Client{Transport: tr}))
 	}
 
-	client := openai.NewClientWithConfig(config)
+	// The same client is reused for benchmark requests, so TLS and retry
+	// options apply consistently instead of only to model discovery.
+	client := api.NewClient(*baseURL, *apiVersion, *apiKey, clientOptions...)
+	benchmark.Client = client
 
 	// Discover model name if not provided
 	if *model == "" {
@@ -103,17 +104,17 @@ func main() {
 
 	// Get input tokens
 	if benchmark.UseRandomInput {
-		_, _, promptTokens, err := api.AskOpenAiRandomInput(client, benchmark.ModelName, benchmark.NumWords, 4, nil)
+		chat, err := api.AskOpenAiRandomInput(client, benchmark.ModelName, benchmark.NumWords, 4, nil)
 		if err != nil {
 			log.Fatalf("Error getting prompt tokens: %v", err)
 		}
-		benchmark.InputTokens = promptTokens
+		benchmark.InputTokens = chat.PromptTokens
 	} else {
-		_, _, promptTokens, err := api.AskOpenAi(client, benchmark.ModelName, *prompt, 4, nil)
+		chat, err := api.AskOpenAi(client, benchmark.ModelName, *prompt, 4, nil)
 		if err != nil {
 			log.Fatalf("Error getting prompt tokens: %v", err)
 		}
-		benchmark.InputTokens = promptTokens
+		benchmark.InputTokens = chat.PromptTokens
 	}
 
 	if *format == "" {

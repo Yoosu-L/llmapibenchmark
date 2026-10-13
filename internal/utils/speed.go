@@ -8,7 +8,7 @@ import (
 
 	"github.com/Yoosu-L/llmapibenchmark/internal/api"
 
-	"github.com/sashabaranov/go-openai"
+	"github.com/openai/openai-go/v3"
 	"github.com/schollz/progressbar/v3"
 )
 
@@ -23,6 +23,10 @@ type SpeedMeasurement struct {
 	MaxTokens      int
 	Latency        float64
 	Concurrency    int
+
+	// Client is shared with the rest of the benchmark so transport settings
+	// (retries, TLS) apply consistently.
+	Client openai.Client
 }
 
 type SpeedResult struct {
@@ -33,6 +37,21 @@ type SpeedResult struct {
 	MinTtft          float64 `json:"min_ttft" yaml:"min-ttft"`
 	SuccessRate      float64 `json:"success_rate" yaml:"success-rate"`
 	Duration         float64 `json:"duration" yaml:"duration"`
+
+	// PromptTtftSource records how TTFT was determined. Prompt TPS and TTFT
+	// columns are only meaningful for api.TtftSourceContent; otherwise they
+	// describe the end of the stream and are displayed as "n/a".
+	PromptTtftSource string `json:"prompt_ttft_source" yaml:"prompt-ttft-source"`
+	// PromptTtftField is the delta key that produced the first token, e.g.
+	// "reasoning" or "content". "mixed" when requests disagreed.
+	PromptTtftField string `json:"prompt_ttft_field" yaml:"prompt-ttft-field"`
+	// TtftFallbackRequests counts the requests whose TTFT fell back to finish_reason.
+	TtftFallbackRequests int `json:"ttft_fallback_requests" yaml:"ttft-fallback-requests"`
+}
+
+// TtftAvailable reports whether the TTFT-derived columns carry a real measurement.
+func (measurement SpeedResult) TtftAvailable() bool {
+	return measurement.PromptTtftSource == api.TtftSourceContent
 }
 
 func roundToTwoDecimals(f float64) float64 {
@@ -41,15 +60,14 @@ func roundToTwoDecimals(f float64) float64 {
 
 // Run measures API generation throughput and TTFT.
 func (setup *SpeedMeasurement) Run(bar *progressbar.ProgressBar) (SpeedResult, error) {
-	config := openai.DefaultConfig(setup.ApiKey)
-	config.BaseURL = setup.BaseUrl
-	config.APIVersion = setup.ApiVersion
-	client := openai.NewClientWithConfig(config)
+	client := setup.Client
 
 	var wg sync.WaitGroup
 	var responseTokens sync.Map
 	var promptTokens sync.Map
 	var ttfts sync.Map
+	var ttftSources sync.Map
+	var ttftFields sync.Map
 	var successfulRequests atomic.Int32
 	var failedRequests atomic.Int32
 
@@ -60,22 +78,23 @@ func (setup *SpeedMeasurement) Run(bar *progressbar.ProgressBar) (SpeedResult, e
 		wg.Add(1)
 		go func(index int) {
 			defer wg.Done()
-			var ttft float64
-			var completionTokens, inputTokens int
+			var chat api.ChatResult
 			var err error
 			if setup.UseRandomInput {
-				ttft, completionTokens, inputTokens, err = api.AskOpenAiRandomInput(client, setup.ModelName, setup.NumWords, setup.MaxTokens, bar)
+				chat, err = api.AskOpenAiRandomInput(client, setup.ModelName, setup.NumWords, setup.MaxTokens, bar)
 			} else {
-				ttft, completionTokens, inputTokens, err = api.AskOpenAi(client, setup.ModelName, setup.Prompt, setup.MaxTokens, bar)
+				chat, err = api.AskOpenAi(client, setup.ModelName, setup.Prompt, setup.MaxTokens, bar)
 			}
 			if err != nil {
 				failedRequests.Add(1)
 				return
 			}
 			successfulRequests.Add(1)
-			ttfts.Store(index, ttft)
-			responseTokens.Store(index, completionTokens)
-			promptTokens.Store(index, inputTokens)
+			ttfts.Store(index, chat.TTFT)
+			ttftSources.Store(index, chat.TTFTSource)
+			ttftFields.Store(index, chat.TTFTField)
+			responseTokens.Store(index, chat.CompletionTokens)
+			promptTokens.Store(index, chat.PromptTokens)
 		}(i)
 	}
 
@@ -102,6 +121,47 @@ func (setup *SpeedMeasurement) Run(bar *progressbar.ProgressBar) (SpeedResult, e
 	totalRequests := setup.Concurrency
 	if totalRequests > 0 {
 		measurement.SuccessRate = float64(successfulRequests.Load()) / float64(totalRequests)
+	}
+
+	// Determine whether TTFT reflects prompt processing for every request.
+	// One fallback request is enough to distrust the row: Prompt TPS uses the max TTFT.
+	contentRequests, fallbackRequests := 0, 0
+	ttftSources.Range(func(_, value interface{}) bool {
+		switch value.(string) {
+		case api.TtftSourceContent:
+			contentRequests++
+		case api.TtftSourceFallback:
+			fallbackRequests++
+		}
+		return true
+	})
+	measurement.TtftFallbackRequests = fallbackRequests
+	switch {
+	case contentRequests > 0 && fallbackRequests == 0:
+		measurement.PromptTtftSource = api.TtftSourceContent
+	case contentRequests > 0 || fallbackRequests > 0:
+		measurement.PromptTtftSource = api.TtftSourceFallback
+	default:
+		measurement.PromptTtftSource = api.TtftSourceNone
+	}
+
+	// Record which delta key produced the first token.
+	fieldCounts := map[string]int{}
+	ttftFields.Range(func(_, value interface{}) bool {
+		if field, ok := value.(string); ok && field != "" {
+			fieldCounts[field]++
+		}
+		return true
+	})
+	switch len(fieldCounts) {
+	case 0:
+		measurement.PromptTtftField = ""
+	case 1:
+		for field := range fieldCounts {
+			measurement.PromptTtftField = field
+		}
+	default:
+		measurement.PromptTtftField = "mixed"
 	}
 
 	// Calculate max and min TTFT

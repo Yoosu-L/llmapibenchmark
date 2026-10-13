@@ -22,12 +22,14 @@ func (benchmark *Benchmark) runCli() error {
 	// Print table header
 	bold := "\033[1m"
 	green := "\033[32m"
+	dim := "\033[2m"
 	reset := "\033[0m"
 	fmt.Printf("%s%s| Conc | Gen TPS | Prompt TPS | Min TTFT(s) | Max TTFT(s) | Success | Total(s) |%s\n", green, bold, reset)
 	fmt.Printf("%s|:----:|:-------:|:----------:|:-----------:|:-----------:|:-------:|:--------:|%s\n", green, reset)
 
 	// Test each concurrency level and print results
-	var results [][]interface{}
+	var results []utils.SpeedResult
+	var notices []string
 	for _, concurrency := range benchmark.ConcurrencyLevels {
 		result, err := benchmark.measureSpeed(latency, concurrency, true)
 		if err != nil {
@@ -35,31 +37,19 @@ func (benchmark *Benchmark) runCli() error {
 		}
 
 		// Print current results
-		fmt.Printf("%s| %4d | %7.2f | %10.2f | %11.2f | %11.2f | %6.2f%% | %8.2f |%s\n",
-			green,
-			concurrency,
-			result.GenerationSpeed,
-			result.PromptThroughput,
-			result.MinTtft,
-			result.MaxTtft,
-			result.SuccessRate*100,
-			result.Duration,
-			reset,
-		)
+		fmt.Printf("%s%s%s\n", green, utils.FormatRow(result), reset)
 
 		// Save results for later
-		results = append(results, []interface{}{
-			concurrency,
-			result.GenerationSpeed,
-			result.PromptThroughput,
-			result.MinTtft,
-			result.MaxTtft,
-			result.SuccessRate,
-			result.Duration,
-		})
+		results = append(results, result)
+		if notice := utils.TtftNotice(result); notice != "" {
+			notices = append(notices, notice)
+		}
 	}
 
 	fmt.Printf("%s|:----:|:-------:|:----------:|:-----------:|:-----------:|:-------:|:--------:|%s\n", green, reset)
+	for _, notice := range notices {
+		fmt.Printf("%s→ %s%s\n", dim, notice, reset)
+	}
 	fmt.Println("\n" + "\033[36m" + strings.Repeat("=", 80) + "\033[0m")
 
 	// Save results to Markdown
@@ -128,6 +118,7 @@ func (benchmark *Benchmark) measureSpeed(latency float64, concurrency int, clear
 		MaxTokens:   benchmark.MaxTokens,
 		Latency:     latency,
 		Concurrency: concurrency,
+		Client:      benchmark.Client,
 	}
 	if benchmark.UseRandomInput {
 		speedMeasurement.UseRandomInput = true

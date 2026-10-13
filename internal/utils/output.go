@@ -6,7 +6,77 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/Yoosu-L/llmapibenchmark/internal/api"
 )
+
+// TtftNotAvailable is printed when a TTFT-derived metric is not a real measurement.
+const TtftNotAvailable = "n/a"
+
+// PromptTpsCell returns the Prompt TPS column value, or "n/a" when TTFT never
+// fired on a content field (the number would describe the whole stream).
+func PromptTpsCell(measurement SpeedResult) interface{} {
+	if !measurement.TtftAvailable() {
+		return TtftNotAvailable
+	}
+	return measurement.PromptThroughput
+}
+
+// MinTtftCell returns the value to print for the Min TTFT column.
+func MinTtftCell(measurement SpeedResult) interface{} {
+	if !measurement.TtftAvailable() {
+		return TtftNotAvailable
+	}
+	return measurement.MinTtft
+}
+
+// MaxTtftCell returns the value to print for the Max TTFT column.
+func MaxTtftCell(measurement SpeedResult) interface{} {
+	if !measurement.TtftAvailable() {
+		return TtftNotAvailable
+	}
+	return measurement.MaxTtft
+}
+
+// FormatCell renders a value with the printf widths the tables use.
+func FormatCell(value interface{}, width int, decimals int) string {
+	switch typed := value.(type) {
+	case string:
+		return fmt.Sprintf("%*s", width, typed)
+	case int:
+		return fmt.Sprintf("%*d", width, typed)
+	case float64:
+		return fmt.Sprintf("%*.*f", width, decimals, typed)
+	default:
+		return fmt.Sprintf("%*v", width, value)
+	}
+}
+
+// FormatRow renders one result row, shared by the console table and the Markdown report.
+func FormatRow(measurement SpeedResult) string {
+	return fmt.Sprintf("| %s | %s | %s | %s | %s | %s | %s |",
+		FormatCell(measurement.Concurrency, 4, 0),
+		FormatCell(measurement.GenerationSpeed, 7, 2),
+		FormatCell(PromptTpsCell(measurement), 10, 2),
+		FormatCell(MinTtftCell(measurement), 11, 2),
+		FormatCell(MaxTtftCell(measurement), 11, 2),
+		FormatCell(measurement.SuccessRate*100, 6, 2)+"%",
+		FormatCell(measurement.Duration, 8, 2),
+	)
+}
+
+// TtftNotice explains why a row shows "n/a", or an empty string when it does not.
+func TtftNotice(measurement SpeedResult) string {
+	switch measurement.PromptTtftSource {
+	case api.TtftSourceFallback:
+		return fmt.Sprintf(
+			"concurrency %d: TTFT never fired on a content field (%d/%d requests fell back to finish_reason); Prompt TPS and TTFT shown as n/a.",
+			measurement.Concurrency, measurement.TtftFallbackRequests, measurement.Concurrency)
+	case api.TtftSourceNone:
+		return fmt.Sprintf("concurrency %d: no valid TTFT.", measurement.Concurrency)
+	}
+	return ""
+}
 
 // PrintBenchmarkHeader prints the benchmark header with details about the test.
 func PrintBenchmarkHeader(modelName string, inputTokens int, maxTokens int, latency float64) {
@@ -44,7 +114,7 @@ func PrintBenchmarkHeader(modelName string, inputTokens int, maxTokens int, late
 }
 
 // SaveResultsToMD saves the benchmark results to a Markdown file.
-func SaveResultsToMD(results [][]interface{}, modelName string, inputTokens int, maxTokens int, latency float64) {
+func SaveResultsToMD(results []SpeedResult, modelName string, inputTokens int, maxTokens int, latency float64) {
 	// sanitize modelName to create a safe filename (replace path separators)
 	safeModelName := strings.ReplaceAll(modelName, "/", "_")
 	safeModelName = strings.ReplaceAll(safeModelName, "\\", "_")
@@ -64,23 +134,16 @@ func SaveResultsToMD(results [][]interface{}, modelName string, inputTokens int,
 	file.WriteString("| Conc | Gen TPS | Prompt TPS | Min TTFT(s) | Max TTFT(s) | Success | Total(s) |\n")
 	file.WriteString("|:----:|:-------:|:----------:|:-----------:|:-----------:|:-------:|:--------:|\n")
 
-	for _, result := range results {
-		concurrency := result[0].(int)
-		generationSpeed := result[1].(float64)
-		promptThroughput := result[2].(float64)
-		minTTFT := result[3].(float64)
-		maxTTFT := result[4].(float64)
-		successRate := result[5].(float64)
-		duration := result[6].(float64)
-		file.WriteString(fmt.Sprintf("| %4d | %7.2f | %10.2f | %11.2f | %11.2f | %6.2f%% | %8.2f |\n",
-			concurrency,
-			generationSpeed,
-			promptThroughput,
-			minTTFT,
-			maxTTFT,
-			successRate*100,
-			duration,
-		))
+	var notices []string
+	for _, measurement := range results {
+		file.WriteString(FormatRow(measurement) + "\n")
+		if notice := TtftNotice(measurement); notice != "" {
+			notices = append(notices, notice)
+		}
+	}
+
+	for _, notice := range notices {
+		file.WriteString("\n> " + notice + "\n")
 	}
 
 	fmt.Printf("Results saved to: %s\n\n", filename)

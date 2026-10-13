@@ -1,6 +1,9 @@
 package main
 
-import "github.com/Yoosu-L/llmapibenchmark/internal/utils"
+import (
+	"github.com/Yoosu-L/llmapibenchmark/internal/utils"
+	"github.com/openai/openai-go/v3"
+)
 
 type Benchmark struct {
 	BaseURL           string
@@ -13,6 +16,9 @@ type Benchmark struct {
 	ConcurrencyLevels []int
 	UseRandomInput    bool
 	NumWords          int
+
+	// Client is shared by the latency probe, model discovery and the measurements.
+	Client openai.Client
 }
 
 type BenchmarkResult struct {
