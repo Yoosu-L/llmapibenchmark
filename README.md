@@ -97,22 +97,31 @@ llmapibenchmark_windows_amd64.exe ^
 | `--base-url` | `-u` | Base URL for LLM API endpoint | Empty (MUST be specified) | Yes |
 | `--api-key` | `-k` | API authentication key | None | No |
 | `--model` | `-m` | Specific AI model to test | Automatically discovers first available model | No |
-| `--concurrency` | `-c` | Comma-separated concurrency levels to test | `1,2,4,8,16,32,64,128` | No |
+| `--concurrency` | `-c` | Comma-separated concurrency levels to test | `1` | No |
 | `--max-tokens` | `-t` | Maximum tokens to generate per request | `512` | No |
 | `--num-words` | `-n` | Number of words for random input prompt | `0` | No |
 | `--prompt` | `-p` | Text prompt for generating responses | A long story | No |
 | `--format` | `-f` | Output format (json, yaml) | `""` | No |
+| `--output` | | Save results to a Markdown file, prepending new runs on top of existing history. Bare `--output` uses `./llm-api-benchmark.md`; a directory gets that file name inside; a path ending in `.md` is used as-is | Disabled | No |
 | `--help` | `-h` | Show help message | `false` | No |
 
 ## Output
 
 The tool provides output in multiple formats, controlled by the `--format` flag.
 
-### Default (CLI Table and Markdown File)
+### Default (CLI Table)
 
-If no format is specified, the tool generates:
-1.  **Real-time console results**: A table is displayed in the terminal with live updates.
-2.  **Markdown file**: A detailed report is saved to `API_Throughput_{ModelName}.md`.
+If no format is specified, the tool prints a real-time results table to the terminal. No file is written unless `--output` is given.
+
+### Markdown File (`--output`)
+
+When `--output` is given, each run is prepended to the Markdown file (newest results at the top, history below), so the file doubles as a run log:
+
+```markdown
+## 2026-01-02 15:04:05
+
+Model / latency / token info, then the results table
+```
 
 **Markdown File Columns:**
 - **Concurrency**: Number of concurrent requests

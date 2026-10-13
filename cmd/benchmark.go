@@ -76,8 +76,10 @@ func (benchmark *Benchmark) runCli() error {
 	}
 	fmt.Println("\n" + green + strings.Repeat("=", 80) + reset)
 
-	// Save results to Markdown
-	utils.SaveResultsToMD(results, benchmark.ModelName, benchmark.InputTokens, benchmark.MaxTokens, latency)
+	// Save results to Markdown only when --output was given.
+	if benchmark.OutputPath != "" {
+		utils.SaveResultsToMD(benchmark.OutputPath, results, benchmark.ModelName, benchmark.InputTokens, benchmark.MaxTokens, latency)
+	}
 
 	return nil
 }

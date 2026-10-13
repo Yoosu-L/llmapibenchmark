@@ -16,6 +16,8 @@ type Benchmark struct {
 	ConcurrencyLevels []int
 	UseRandomInput    bool
 	NumWords          int
+	// OutputPath is the Markdown report target; empty means no file output.
+	OutputPath string
 
 	// Client is shared by the latency probe, model discovery and the measurements.
 	Client openai.Client

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -123,38 +124,49 @@ func PrintBenchmarkHeader(modelName string, inputTokens int, maxTokens int, late
 	fmt.Printf("%s%sInput:%s %-25d | %sOutput:%s  %d tokens%s\n\n", green, bold, reset+green, inputTokens, bold, reset+green, maxTokens, reset)
 }
 
-// SaveResultsToMD saves the benchmark results to a Markdown file.
-func SaveResultsToMD(results []SpeedResult, modelName string, inputTokens int, maxTokens int, latency float64) {
-	// sanitize modelName to create a safe filename (replace path separators)
-	safeModelName := strings.ReplaceAll(modelName, "/", "_")
-	safeModelName = strings.ReplaceAll(safeModelName, "\\", "_")
-	safeModelName = strings.TrimSpace(safeModelName)
-	if safeModelName == "" {
-		safeModelName = "model"
+// SaveResultsToMD prepends the benchmark results to the Markdown file at path.
+// Existing content is kept below, so the newest run is always at the top.
+// Returns the resolved file path, or "" on failure.
+func SaveResultsToMD(path string, results []SpeedResult, modelName string, inputTokens int, maxTokens int, latency float64) string {
+	// Resolve the target file: bare --output or a directory gets the default name.
+	if !strings.HasSuffix(strings.ToLower(path), ".md") {
+		path = filepath.Join(path, "llm-api-benchmark.md")
 	}
-	filename := fmt.Sprintf("API_Throughput_%s.md", safeModelName)
-	file, err := os.Create(filename)
-	if err != nil {
-		log.Printf("Error creating file: %v", err)
-		return
+	if dir := filepath.Dir(path); dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			log.Printf("Error creating output directory: %v", err)
+			return ""
+		}
 	}
-	defer file.Close()
 
-	file.WriteString(fmt.Sprintf("```\nModel: %s\nLatency: %.2f ms\nInput: %d tokens / Output: %d tokens\n```\n\n", modelName, latency, inputTokens, maxTokens))
-	file.WriteString("| Conc | Decode TPS | Prompt TPS | Min TTFT(s) | Max TTFT(s) | Success | Total(s) |\n")
-	file.WriteString("|:----:|:----------:|:----------:|:-----------:|:-----------:|:-------:|:--------:|\n")
+	var block strings.Builder
+	block.WriteString(fmt.Sprintf("## %s\n\n", time.Now().Format("2006-01-02 15:04:05")))
+	block.WriteString(fmt.Sprintf("```\nModel: %s\nLatency: %.2f ms\nInput: %d tokens / Output: %d tokens\n```\n\n", modelName, latency, inputTokens, maxTokens))
+	block.WriteString("| Conc | Decode TPS | Prompt TPS | Min TTFT(s) | Max TTFT(s) | Success | Total(s) |\n")
+	block.WriteString("|:----:|:----------:|:----------:|:-----------:|:-----------:|:-------:|:--------:|\n")
 
 	var notices []string
 	for _, measurement := range results {
-		file.WriteString(FormatRow(measurement) + "\n")
+		block.WriteString(FormatRow(measurement) + "\n")
 		if notice := TtftNotice(measurement); notice != "" {
 			notices = append(notices, notice)
 		}
 	}
 
 	for _, notice := range notices {
-		file.WriteString("\n> " + notice + "\n")
+		block.WriteString("\n> " + notice + "\n")
 	}
 
-	fmt.Printf("Results saved to: %s\n\n", filename)
+	// Prepend: newest results first, previous history below.
+	existing, err := os.ReadFile(path)
+	if err == nil && len(existing) > 0 {
+		block.WriteString("\n---\n\n" + string(existing))
+	}
+	if err := os.WriteFile(path, []byte(block.String()), 0o644); err != nil {
+		log.Printf("Error writing file: %v", err)
+		return ""
+	}
+
+	fmt.Printf("Results saved to: %s\n\n", path)
+	return path
 }

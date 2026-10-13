@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/Yoosu-L/llmapibenchmark/internal/api"
 	"github.com/Yoosu-L/llmapibenchmark/internal/utils"
@@ -17,6 +18,22 @@ const (
 	defaultPrompt = "Write a long story, no less than 10,000 words, starting from a long, long time ago."
 )
 
+// mergeOutputValue rewrites "--output path" into "--output=path". A flag with
+// NoOptDefVal only accepts the "=" form, so the space-separated spelling would
+// otherwise swallow nothing and leave "path" as a positional arg.
+func mergeOutputValue(args []string) []string {
+	merged := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--output" && i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+			merged = append(merged, "--output="+args[i+1])
+			i++
+			continue
+		}
+		merged = append(merged, args[i])
+	}
+	return merged
+}
+
 func main() {
 	baseURL := pflag.StringP("base-url", "u", "", "Base URL of the OpenAI API")
 	apiVersion := pflag.StringP("api-version", "v", "", "API version (api-version) query parameter value")
@@ -26,10 +43,13 @@ func main() {
 	numWords := pflag.IntP("num-words", "n", 0, "If set to a value above 0 a random string with this length will be used as prompt")
 	concurrencyStr := pflag.StringP("concurrency", "c", "1", "Comma-separated list of concurrency levels")
 	maxTokens := pflag.IntP("max-tokens", "t", 512, "Maximum number of tokens to generate")
+	outputPath := pflag.String("output", "", "Save results to a Markdown file (prepend, keeps history). With no value, writes ./llm-api-benchmark.md")
 	format := pflag.StringP("format", "f", "", "Output format (optional)")
 	help := pflag.BoolP("help", "h", false, "Show this help message")
 	insecureSkipTLSVerify := pflag.Bool("insecure-skip-tls-verify", false, "Skip TLS certificate verification. Use with caution, this is insecure.")
-	pflag.Parse()
+	// Allow a bare --output (no value) meaning "save to the default file".
+	pflag.Lookup("output").NoOptDefVal = "llm-api-benchmark.md"
+	pflag.CommandLine.Parse(mergeOutputValue(os.Args[1:]))
 
 	if *help {
 		fmt.Printf("Usage of %s:\n", os.Args[0])
@@ -51,6 +71,7 @@ func main() {
 		benchmark.NumWords = 1
 	}
 	benchmark.MaxTokens = *maxTokens
+	benchmark.OutputPath = *outputPath
 
 	// Parse concurrency levels
 	concurrencyLevels, err := utils.ParseConcurrencyLevels(*concurrencyStr)
