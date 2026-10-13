@@ -24,7 +24,7 @@ func main() {
 	model := pflag.StringP("model", "m", "", "Model to be used for the requests (optional)")
 	prompt := pflag.StringP("prompt", "p", defaultPrompt, "Prompt to be used for generating responses")
 	numWords := pflag.IntP("num-words", "n", 0, "If set to a value above 0 a random string with this length will be used as prompt")
-	concurrencyStr := pflag.StringP("concurrency", "c", "1,2,4,8,16,32,64,128", "Comma-separated list of concurrency levels")
+	concurrencyStr := pflag.StringP("concurrency", "c", "1", "Comma-separated list of concurrency levels")
 	maxTokens := pflag.IntP("max-tokens", "t", 512, "Maximum number of tokens to generate")
 	format := pflag.StringP("format", "f", "", "Output format (optional)")
 	help := pflag.BoolP("help", "h", false, "Show this help message")
